@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/yunhye/vibe/pulse-check/src/hooks)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

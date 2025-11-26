@@ -1,145 +1,206 @@
 import { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
-import { questions, text_questions } from '../static/questions';
 import { supabase } from '../lib/supabaseClient';
+import { useAdminAuth } from '../hooks/useAdminAuth';
+import { formatWeekLabel, parseDate } from '../utils/dateUtils';
+
+// 커스텀 툴팁
+const CustomTooltip = ({ active, payload, questionId, trends }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const value = data[questionId];
+    const trend = trends?.[questionId];
+    const count = data.count;
+
+    return (
+      <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+        <p className="font-semibold text-gray-900 mb-1">{data.week}</p>
+        <p className="text-sm text-gray-700">
+          평균: <span className="font-medium">{value?.toFixed(1)}점</span>
+        </p>
+        {trend && (
+          <p
+            className={`text-sm flex items-center gap-1 ${
+              trend.direction === 'up' ? 'text-green-600' : trend.direction === 'down' ? 'text-red-600' : 'text-gray-600'
+            }`}
+          >
+            {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'}
+            <span>
+              {trend.change > 0 ? '+' : ''}
+              {trend.change} ({trend.changePercentage})
+            </span>
+          </p>
+        )}
+        <p className="text-xs text-gray-500 mt-1">응답: {count}명</p>
+      </div>
+    );
+  }
+  return null;
+};
 
 const ResultsPage = () => {
   const navigate = useNavigate();
+  const { isAdmin, loading: authLoading } = useAdminAuth();
   const [historicalData, setHistoricalData] = useState([]);
-  const [comments, setComments] = useState({ improvement: [], positive: [] });
+  const [textResponses, setTextResponses] = useState({});
+  const [questions, setQuestions] = useState([]);
+  const [textQuestions, setTextQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 주차별 데이터를 처리하는 함수
-  const processWeeklyData = (data) => {
+  // 주차별 데이터 처리
+  const processWeeklyData = (responses, ratingQuestions) => {
     const weeklyGroups = {};
 
-    data.forEach((item) => {
-      // created_at 기반으로 월과 주차 계산
-      const date = new Date(item.created_at);
-      const month = date.getMonth() + 1;
-      const week = Math.ceil((date.getDate() + (date.getDay() === 0 ? 7 : date.getDay())) / 7);
-      const key = `${month}월 ${week}주차`;
+    // submitted_at 기준으로 그룹화
+    responses.forEach((response) => {
+      const date = parseDate(response.submitted_at);
+      if (!date) return;
 
-      if (!weeklyGroups[key]) {
-        weeklyGroups[key] = {
-          week: key,
-          month: month,
-          weekNumber: week,
-          surveys: [],
-          q1: 0,
-          q2: 0,
-          q3: 0,
-          q4: 0,
-          q5: 0,
-          q6: 0,
-          q7: 0,
-          q8: 0,
-          q9: 0,
-          q10: 0,
-          count: 0,
+      const weekLabel = formatWeekLabel(date);
+      const submittedAt = response.submitted_at;
+
+      if (!weeklyGroups[weekLabel]) {
+        weeklyGroups[weekLabel] = {
+          week: weekLabel,
+          date: date,
+          submissions: {},
         };
       }
-      weeklyGroups[key].surveys.push(item);
+
+      // 같은 submitted_at끼리 그룹화 (같은 사람의 응답)
+      if (!weeklyGroups[weekLabel].submissions[submittedAt]) {
+        weeklyGroups[weekLabel].submissions[submittedAt] = {};
+      }
+
+      weeklyGroups[weekLabel].submissions[submittedAt][response.question_id] = response.response_value;
     });
 
-    // 각 주차별 평균 계산
-    return Object.values(weeklyGroups)
+    // 주차별 평균 계산
+    const weeklyData = Object.values(weeklyGroups)
       .map((weekData) => {
-        const count = weekData.surveys.length;
-        if (count === 0) return weekData;
+        const submissions = Object.values(weekData.submissions);
+        const count = submissions.length;
+        if (count === 0) return null;
 
-        weekData.q1 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q1 || 0), 0) / count).toFixed(1));
-        weekData.q2 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q2 || 0), 0) / count).toFixed(1));
-        weekData.q3 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q3 || 0), 0) / count).toFixed(1));
-        weekData.q4 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q4 || 0), 0) / count).toFixed(1));
-        weekData.q5 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q5 || 0), 0) / count).toFixed(1));
-        weekData.q6 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q6 || 0), 0) / count).toFixed(1));
-        weekData.q7 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q7 || 0), 0) / count).toFixed(1));
-        weekData.q8 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q8 || 0), 0) / count).toFixed(1));
-        weekData.q9 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q9 || 0), 0) / count).toFixed(1));
-        weekData.q10 = parseFloat((weekData.surveys.reduce((sum, s) => sum + (s.q10 || 0), 0) / count).toFixed(1));
-
-        return {
+        const avgData = {
           week: weekData.week,
-          month: weekData.month,
-          weekNumber: weekData.weekNumber,
-          q1: weekData.q1,
-          q2: weekData.q2,
-          q3: weekData.q3,
-          q4: weekData.q4,
-          q5: weekData.q5,
-          q6: weekData.q6,
-          q7: weekData.q7,
-          q8: weekData.q8,
-          q9: weekData.q9,
-          q10: weekData.q10,
+          date: weekData.date,
           count,
-          created_at: weekData.surveys[0].created_at,
+          created_at: weekData.date.toISOString(),
         };
+
+        // 각 rating 질문의 평균
+        ratingQuestions.forEach((question) => {
+          const values = submissions.map((sub) => parseFloat(sub[question.id])).filter((v) => !isNaN(v));
+
+          if (values.length > 0) {
+            const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+            avgData[question.id] = parseFloat(avg.toFixed(1));
+          } else {
+            avgData[question.id] = null;
+          }
+        });
+
+        return avgData;
       })
-      .sort((a, b) => {
-        // 월과 주차별 정렬 (월 먼저, 그 다음 주차 순으로)
-        const aMonth = parseInt(a.month) || 0;
-        const bMonth = parseInt(b.month) || 0;
-        const aWeek = parseInt(a.weekNumber) || 0;
-        const bWeek = parseInt(b.weekNumber) || 0;
+      .filter((d) => d !== null)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        if (aMonth !== bMonth) {
-          return aMonth - bMonth;
-        }
-        return aWeek - bWeek;
-      });
+    return addTrendIndicators(weeklyData, ratingQuestions);
   };
 
-  const getHistoricalData = async () => {
-    try {
-      const { data, error } = await supabase.from('pulse_surveys').select('*').order('created_at', { ascending: false });
+  // 전주 대비 변화량
+  const addTrendIndicators = (data, ratingQuestions) => {
+    return data.map((item, index) => {
+      if (index === 0) {
+        return { ...item, trends: {} };
+      }
 
-      if (error) throw error;
+      const previous = data[index - 1];
+      const trends = {};
 
-      return processWeeklyData(data);
-    } catch (err) {
-      console.error('Historical data fetch error:', err);
-      throw err;
-    }
-  };
+      ratingQuestions.forEach((question) => {
+        const current = item[question.id];
+        const prev = previous[question.id];
 
-  const getComments = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('pulse_surveys')
-        .select('comment1, comment2, created_at, week')
-        .order('created_at', { ascending: false })
-        .limit(20); // 최근 20개만 가져오기
+        if (current !== null && prev !== null && !isNaN(current) && !isNaN(prev)) {
+          const change = current - prev;
+          const changePercentage = prev !== 0 ? ((change / prev) * 100).toFixed(1) : '0.0';
 
-      if (error) throw error;
-
-      const improvement = [];
-      const positive = [];
-
-      data.forEach((survey) => {
-        if (survey.comment1 && survey.comment1.trim()) {
-          improvement.push({ response: survey.comment1.trim(), created_at: survey.created_at });
-        }
-        if (survey.comment2 && survey.comment2.trim()) {
-          positive.push({ response: survey.comment2.trim(), created_at: survey.created_at });
+          trends[question.id] = {
+            change: change.toFixed(2),
+            changePercentage: `${change > 0 ? '+' : ''}${changePercentage}%`,
+            direction: change > 0.1 ? 'up' : change < -0.1 ? 'down' : 'stable',
+          };
         }
       });
 
-      return {
-        improvement,
-        positive,
-      };
-    } catch (err) {
-      console.error('Comments fetch error:', err);
-      throw err;
-    }
+      return { ...item, trends };
+    });
+  };
+
+  // 데이터 가져오기
+  const fetchQuestions = async () => {
+    const { data, error } = await supabase.from('questions').select('*').eq('is_active', true).order('order_index', { ascending: true });
+    if (error) throw error;
+
+    const ratingQuestions = data.filter((q) => q.question_type === 'rating');
+    const textQuestionsData = data.filter((q) => q.question_type === 'text');
+
+    setQuestions(ratingQuestions);
+    setTextQuestions(textQuestionsData);
+
+    return { ratingQuestions, textQuestionsData };
+  };
+
+  const getHistoricalData = async (ratingQuestions) => {
+    const { data, error } = await supabase
+      .from('responses')
+      .select('*')
+      .in(
+        'question_id',
+        ratingQuestions.map((q) => q.id),
+      )
+      .order('submitted_at', { ascending: false });
+
+    if (error) throw error;
+    return processWeeklyData(data, ratingQuestions);
+  };
+
+  const getTextResponses = async (textQuestionsData) => {
+    const { data, error } = await supabase
+      .from('responses')
+      .select('*')
+      .in(
+        'question_id',
+        textQuestionsData.map((q) => q.id),
+      )
+      .order('submitted_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    // 질문별 그룹화
+    const grouped = {};
+    textQuestionsData.forEach((q) => {
+      grouped[q.id] = [];
+    });
+
+    data.forEach((response) => {
+      if (grouped[response.question_id]) {
+        grouped[response.question_id].push({
+          response: response.response_value,
+          created_at: response.submitted_at,
+        });
+      }
+    });
+
+    return grouped;
   };
 
   const convertDate = (dateString) => {
-    //date를 00년 0월 0주차로
     const date = new Date(dateString);
     const year = date.getFullYear().toString().slice(-2);
     const month = date.getMonth() + 1;
@@ -148,109 +209,35 @@ const ResultsPage = () => {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+    if (!authLoading && !isAdmin) {
+      navigate('/login');
+      return;
+    }
 
-        const [historicalData, commentsData] = await Promise.all([getHistoricalData(), getComments()]);
+    if (!authLoading && isAdmin) {
+      fetchData();
+    }
+  }, [authLoading, isAdmin, navigate]);
 
-        setHistoricalData(historicalData);
-        setComments(commentsData);
-      } catch (err) {
-        console.error('Data fetch error:', err);
-        setError('데이터를 불러오는 중 오류가 발생했습니다.');
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // 오류 시 기본 데이터 설정
-        setHistoricalData([
-          {
-            week: '9월 1주차',
-            month: '9',
-            weekNumber: '1',
-            q1: 3.2,
-            q2: 3.8,
-            q3: 3.5,
-            q4: 2.9,
-            q5: 3.1,
-            q6: 3.2,
-            q7: 3.3,
-            q8: 3.4,
-            q9: 3.5,
-            q10: 3.6,
-          },
-          {
-            week: '9월 2주차',
-            month: '9',
-            weekNumber: '2',
-            q1: 3.4,
-            q2: 3.6,
-            q3: 3.3,
-            q4: 3.2,
-            q5: 3.0,
-            q6: 3.1,
-            q7: 3.2,
-            q8: 3.3,
-            q9: 3.4,
-            q10: 3.5,
-          },
-          {
-            week: '9월 3주차',
-            month: '9',
-            weekNumber: '3',
-            q1: 3.8,
-            q2: 4.1,
-            q3: 3.7,
-            q4: 3.5,
-            q5: 3.4,
-            q6: 3.5,
-            q7: 3.6,
-            q8: 3.7,
-            q9: 3.8,
-            q10: 3.9,
-          },
-          { week: '9월 4주차', month: '9', weekNumber: '4', q1: 3.6, q2: 3.9, q3: 3.8, q4: 3.3, q5: 3.2 },
-          {
-            week: '10월 1주차',
-            month: '10',
-            weekNumber: '1',
-            q1: 3.6,
-            q2: 3.9,
-            q3: 3.8,
-            q4: 3.3,
-            q5: 3.2,
-            q6: 3.1,
-            q7: 3.0,
-            q8: 2.9,
-            q9: 2.8,
-            q10: 2.7,
-          },
-        ]);
-        // setComments([
-        //   {
-        //     week: '1주차',
-        //     comments: [
-        //       {
-        //         question: "팀에서 개선되었으면 하는 점이 있다면 자유롭게 적어주세요.",
-        //         answer: "팀 협업이 점점 개선되고 있는 것 같습니다.",
-        //         type: 'improvement'
-        //       },
-        //       {
-        //         question: "팀에서 잘되고 있다고 생각하는 점이 있다면 적어주세요.",
-        //         answer: "의사소통이 원활해져서 좋습니다.",
-        //         type: 'positive'
-        //       }
-        //     ]
-        //   }
-        // ]);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const { ratingQuestions, textQuestionsData } = await fetchQuestions();
+      const [historicalData, textResponsesData] = await Promise.all([getHistoricalData(ratingQuestions), getTextResponses(textQuestionsData)]);
 
-    fetchData();
-  }, []);
+      setHistoricalData(historicalData);
+      setTextResponses(textResponsesData);
+    } catch (err) {
+      console.error('Data fetch error:', err);
+      setError('데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -264,20 +251,18 @@ const ResultsPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        {/* 오류 메시지 */}
         {error && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800">{error} (기본 데이터로 표시됩니다)</p>
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800">{error}</p>
           </div>
         )}
 
-        {/* 감사 메시지 */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8 text-center">
-          <h2 className="text-2xl font-bold text-green-800 mb-2">설문 완료!</h2>
-          <p className="text-green-700">한 주 동안 고생하셨습니다. 소중한 의견 감사드립니다.</p>
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">팀 펄스체크 결과</h2>
+          <p className="text-gray-600">주차별 추이와 팀원들의 의견을 확인하세요</p>
         </div>
 
-        {/* 그래프 섹션 */}
+        {/* 그래프 */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <h3 className="text-xl font-bold text-gray-800 mb-6">주차별 우리팀의 추이</h3>
 
@@ -287,87 +272,85 @@ const ResultsPage = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {questions.map((question, index) => (
-                <div key={index} className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-600 mb-3">{question}</h4>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={historicalData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="week" fontSize={10} />
-                      <YAxis domain={[1, 5]} fontSize={10} />
-                      {/* count 표시 */}
-                      <Tooltip
-                        formatter={(value, name) => [`${value?.toFixed(1)}`, `평점`]}
-                        labelFormatter={(label, payload) => {
-                          if (!payload || payload.length === 0) return label;
-                          const count = payload[0].payload.count;
-                          return `${convertDate(payload[0].payload.created_at)} (응답자: ${count}명)`;
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey={`q${index + 1}`}
-                        stroke="#3B82F6"
-                        strokeWidth={3}
-                        dot={{ fill: '#3B82F6', r: 4 }}
-                        connectNulls={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ))}
+              {questions.map((question) => {
+                const latestData = historicalData[historicalData.length - 1];
+                const trend = latestData?.trends?.[question.id];
+
+                return (
+                  <div key={question.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="text-sm font-medium text-gray-600 flex-1">{question.question_text}</h4>
+                      {trend && (
+                        <div
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                            trend.direction === 'up'
+                              ? 'bg-green-100 text-green-700'
+                              : trend.direction === 'down'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'}
+                          <span>{trend.changePercentage}</span>
+                        </div>
+                      )}
+                    </div>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <LineChart data={historicalData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="week" fontSize={10} />
+                        <YAxis domain={[1, 5]} fontSize={10} />
+                        <Tooltip content={<CustomTooltip questionId={question.id} trends={latestData?.trends} />} />
+                        <Line
+                          type="monotone"
+                          dataKey={question.id}
+                          stroke="#3B82F6"
+                          strokeWidth={3}
+                          dot={{ fill: '#3B82F6', r: 4 }}
+                          connectNulls={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* 의견 섹션 */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-6">팀원들의 의견</h3>
+        {/* 의견 */}
+        {textQuestions.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-6">팀원들의 의견</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-lg font-semibold text-gray-700 mb-4">{text_questions[0]}</h4>
-              <div className="space-y-3">
-                {comments.improvement.length > 0 ? (
-                  comments.improvement.map((comment, index) => (
-                    <div key={index} className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                      <p className="text-sm text-gray-700">
-                        {comment.response} - {convertDate(comment.created_at)}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm">아직 의견이 없습니다.</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-lg font-semibold text-gray-700 mb-4">{text_questions[1]}</h4>
-              <div className="space-y-3">
-                {comments.positive.length > 0 ? (
-                  comments.positive.map((comment, index) => (
-                    <div key={index} className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
-                      <p className="text-sm text-gray-700">
-                        {comment.response} - {convertDate(comment.created_at)}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm">아직 의견이 없습니다.</p>
-                )}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {textQuestions.map((textQuestion) => (
+                <div key={textQuestion.id}>
+                  <h4 className="text-lg font-semibold text-gray-700 mb-4">{textQuestion.question_text}</h4>
+                  <div className="space-y-3">
+                    {textResponses[textQuestion.id]?.length > 0 ? (
+                      textResponses[textQuestion.id].map((item, idx) => (
+                        <div key={idx} className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                          <p className="text-sm text-gray-700">{item.response}</p>
+                          <p className="text-xs text-gray-500 mt-1">{convertDate(item.created_at)}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">아직 의견이 없습니다.</p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* 재시작 버튼 */}
         <div className="text-center mt-8">
           <button
             onClick={() => navigate('/survey')}
             className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200"
           >
-            다시 시작하기
+            설문 페이지로 이동
           </button>
         </div>
       </div>
