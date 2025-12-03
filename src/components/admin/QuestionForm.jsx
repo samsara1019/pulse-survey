@@ -6,6 +6,7 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
     question_type: 'rating',
     order_index: nextOrderIndex || 1,
     is_active: true,
+    is_optional: false,
   });
 
   useEffect(() => {
@@ -15,6 +16,7 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
         question_type: question.question_type,
         order_index: question.order_index,
         is_active: question.is_active,
+        is_optional: question.is_optional,
       });
     } else {
       setFormData({
@@ -22,6 +24,7 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
         question_type: 'rating',
         order_index: nextOrderIndex || 1,
         is_active: true,
+        is_optional: false,
       });
     }
   }, [question, nextOrderIndex]);

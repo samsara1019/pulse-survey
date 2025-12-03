@@ -88,6 +88,9 @@ const SurveyPage = () => {
     const allQuestions = [...questions, ...textQuestions];
     return allQuestions.every((question) => {
       const answer = surveyData[question.id];
+      if (question.is_optional) {
+        return true;
+      }
       return answer && answer.trim() !== '';
     });
   };
