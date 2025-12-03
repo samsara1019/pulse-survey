@@ -145,7 +145,12 @@ const SurveyPage = () => {
         </div>
 
         {/* 진행률 바 */}
-        <div className="mb-8">
+        <div
+          className="mb-8 sticky top-0 p-4 
+                rounded-xl backdrop-blur-md 
+                bg-white/30 border border-white/10 
+                shadow-sm"
+        >
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium text-gray-700">진행률</span>
             <span className="text-sm font-medium text-blue-600">

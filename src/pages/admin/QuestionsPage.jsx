@@ -83,6 +83,11 @@ const QuestionsPage = () => {
   const handleEditQuestion = (question) => {
     setEditingQuestion(question);
     setShowForm(true);
+    setScrollTop();
+  };
+
+  const setScrollTop = () => {
+    window.scrollTo({ top: 0 });
   };
 
   const handleDeleteQuestion = async (questionId) => {
