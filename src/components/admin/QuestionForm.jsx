@@ -40,9 +40,7 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        {question ? '질문 수정' : '새 질문 추가'}
-      </h3>
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">{question ? '질문 수정' : '새 질문 추가'}</h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* 질문 텍스트 */}
@@ -76,9 +74,7 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
             <option value="rating">1-5점 평가 (Rating)</option>
             <option value="text">주관식 (Text)</option>
           </select>
-          <p className="mt-1 text-xs text-gray-500">
-            Rating: 1-5점 척도로 평가 / Text: 자유 응답 텍스트
-          </p>
+          <p className="mt-1 text-xs text-gray-500">Rating: 1-5점 척도로 평가 / Text: 자유 응답 텍스트</p>
         </div>
 
         {/* 순서 */}
@@ -95,9 +91,7 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
             onChange={(e) => handleChange('order_index', parseInt(e.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <p className="mt-1 text-xs text-gray-500">
-            질문이 표시되는 순서를 지정합니다. 낮은 숫자가 먼저 표시됩니다.
-          </p>
+          <p className="mt-1 text-xs text-gray-500">질문이 표시되는 순서를 지정합니다. 낮은 숫자가 먼저 표시됩니다.</p>
         </div>
 
         {/* 활성화 여부 */}
@@ -114,19 +108,26 @@ const QuestionForm = ({ question, onSave, onCancel, nextOrderIndex }) => {
           </label>
         </div>
 
+        {/* 옵셔널 여부 */}
+        <div className="flex items-center">
+          <input
+            id="is_optional"
+            type="checkbox"
+            checked={formData.is_optional}
+            onChange={(e) => handleChange('is_optional', e.target.checked)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="is_optional" className="ml-2 block text-sm text-gray-700">
+            옵셔널 (체크 시 선택사항)
+          </label>
+        </div>
+
         {/* 버튼 */}
         <div className="flex gap-3 pt-4">
-          <button
-            type="submit"
-            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium"
-          >
+          <button type="submit" className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium">
             {question ? '수정 저장' : '질문 추가'}
           </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 font-medium"
-          >
+          <button type="button" onClick={onCancel} className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 font-medium">
             취소
           </button>
         </div>

@@ -30,10 +30,7 @@ const QuestionsPage = () => {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('questions')
-        .select('*')
-        .order('order_index', { ascending: true });
+      const { data, error: fetchError } = await supabase.from('questions').select('*').order('order_index', { ascending: true });
 
       if (fetchError) throw fetchError;
 
@@ -59,15 +56,14 @@ const QuestionsPage = () => {
             question_type: questionData.question_type,
             order_index: questionData.order_index,
             is_active: questionData.is_active,
+            is_optional: questionData.is_optional,
           })
           .eq('id', editingQuestion.id);
 
         if (updateError) throw updateError;
       } else {
         // 새로 추가
-        const { error: insertError } = await supabase
-          .from('questions')
-          .insert([questionData]);
+        const { error: insertError } = await supabase.from('questions').insert([questionData]);
 
         if (insertError) throw insertError;
       }
@@ -97,10 +93,7 @@ const QuestionsPage = () => {
     try {
       setError(null);
 
-      const { error: deleteError } = await supabase
-        .from('questions')
-        .delete()
-        .eq('id', questionId);
+      const { error: deleteError } = await supabase.from('questions').delete().eq('id', questionId);
 
       if (deleteError) throw deleteError;
 
@@ -116,10 +109,7 @@ const QuestionsPage = () => {
     try {
       setError(null);
 
-      const { error: updateError } = await supabase
-        .from('questions')
-        .update({ is_active: !isActive })
-        .eq('id', questionId);
+      const { error: updateError } = await supabase.from('questions').update({ is_active: !isActive }).eq('id', questionId);
 
       if (updateError) throw updateError;
 
@@ -142,10 +132,7 @@ const QuestionsPage = () => {
       }));
 
       for (const update of updates) {
-        const { error: updateError } = await supabase
-          .from('questions')
-          .update({ order_index: update.order_index })
-          .eq('id', update.id);
+        const { error: updateError } = await supabase.from('questions').update({ order_index: update.order_index }).eq('id', update.id);
 
         if (updateError) throw updateError;
       }
@@ -192,10 +179,7 @@ const QuestionsPage = () => {
               >
                 결과 보기
               </button>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-              >
+              <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
                 로그아웃
               </button>
             </div>
