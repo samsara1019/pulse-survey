@@ -144,7 +144,7 @@ const SurveyPage = () => {
           <p className="text-sm text-gray-500 mt-2">모든 응답은 익명으로 처리됩니다</p>
         </div>
 
-        {/* 진행률 바 */}
+        {/* 진행률  바 */}
         <div
           className="mb-8 sticky top-0 p-4 
                 rounded-xl backdrop-blur-md 
